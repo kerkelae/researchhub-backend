@@ -337,12 +337,10 @@ class WithdrawalViewSet(viewsets.ModelViewSet):
         )
         if user.withdrawals.count() > 0 or last_withdrawal_tx:
             time_ago = timezone.now() - timedelta(weeks=2)
-            minutes_ago = timezone.now() - timedelta(minutes=10)
             last_withdrawal = user.withdrawals.order_by("id").last()
             valid = True
             if last_withdrawal:
-                valid = last_withdrawal.created_date < minutes_ago
-
+                valid = last_withdrawal.created_date < time_ago
             if valid:
                 last_withdrawal = (
                     user.withdrawals.filter(
@@ -355,32 +353,29 @@ class WithdrawalViewSet(viewsets.ModelViewSet):
                     return (True, None)
                 valid = last_withdrawal.created_date < time_ago
                 last_withdrawal_tx_valid = True
-
                 if last_withdrawal_tx:
                     last_withdrawal_tx_valid = (
                         last_withdrawal_tx.created_date < time_ago
                     )
-
                 if valid and last_withdrawal_tx_valid:
                     return (True, None)
-
-                time_since_withdrawal = last_withdrawal.created_date - time_ago
-                return (
-                    False,
-                    "The next time you're able to withdraw is in {} days".format(
-                        time_since_withdrawal.days
-                    ),
-                )
-            else:
-                time_since_withdrawal = last_withdrawal.created_date - minutes_ago
-                minutes = int(round(time_since_withdrawal.seconds / 60, 0))
-                return (
-                    False,
-                    "The next time you're able to withdraw is in {} minutes".format(
-                        minutes
-                    ),
-                )
-
+                time_since_withdrawal = timezone.now() - last_withdrawal.created_date
+                if time_since_withdrawal < timedelta(days=1):
+                    hours = int(time_since_withdrawal.total_seconds() // 3600)
+                    return (
+                        False,
+                        "The next time you're able to withdraw is in {} hours".format(
+                            hours
+                        ),
+                    )
+                else:
+                    days = time_since_withdrawal.days
+                    return (
+                        False,
+                        "The next time you're able to withdraw is in {} days".format(
+                            days
+                        ),
+                    )
         return (True, None)
 
     def _check_withdrawal_amount(self, amount, transaction_fee, user):
